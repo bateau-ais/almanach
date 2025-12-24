@@ -54,12 +54,12 @@ async def _publish_message(message, topic: str, ip: str, port: int) -> None:
     Fonction interne pour publier un message sur NATS.
 
     Args:
-        message: Le message à publier (sera sérialisé en MessagePack).
+        message: Le message à publier sérialisé en MessagePack.
         topic (str): Le topic NATS.
         ip (str): L'adresse IP du serveur NATS.
         port (int): Le port du serveur NATS.
     """
-    _LOGGER.debug("Connexion to the NATS server at {}:{}".format(ip, port))
+    _LOGGER.debug("Connection to the NATS server at {}:{}".format(ip, port))
     nc = await nats.connect(f"nats://{ip}:{port}")  # connexion au serveur NATS
 
     message: bytes = msgpack.packb(message)  # type: ignore  packb renvoie toujours des bytes
