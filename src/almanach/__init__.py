@@ -1,5 +1,3 @@
-def hello() -> str:
-    return "Hello from almanach!"
+from . import subscription
 
-
-__all__ = ["hello"]
+__all__ = [""]
