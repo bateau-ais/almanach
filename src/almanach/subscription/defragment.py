@@ -59,7 +59,7 @@ class JoinDefragmenter:
 
     def push(
         self, source: str, payload: Mapping[str, object]
-    ) -> list[dict[str, object]]:
+    ) -> list[Mapping[str, object]]:
         self._cleanup()
 
         join_key = self._extract_key(payload)

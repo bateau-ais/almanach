@@ -5,7 +5,7 @@ from typing import Awaitable, Callable, Mapping, cast
 import msgpack  # type: ignore[import-not-found]
 import nats  # type: ignore[import-not-found]
 
-from ._nats_protocols import NatsClient, NatsMsg
+from ._nats_protocols import NatsMsg
 from ._types import (
     Topic,
     coerce_mapping,
@@ -14,6 +14,8 @@ from ._types import (
     validate_topic,
 )
 from .defragment import JoinDefragmenter
+
+type NatsClient = nats.NATS
 
 
 class Pipeline[Raw, T]:
