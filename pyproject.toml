@@ -50,3 +50,31 @@ method = "smallest"
 distance = "{next_version}.dev{distance}+{vcs}{rev}"
 dirty = "{base_version}+d{build_date:%Y%m%d}"
 distance-dirty = "{next_version}.dev{distance}+{vcs}{rev}.d{build_date:%Y%m%d}"
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+norecursedirs = [".git", ".devenv", ".direnv", "dist", "build"]
+
+# Options générales (plugins: pytest-sugar, pytest-clarity)
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+    "--showlocals",
+]
+
+# Couverture (plugin: pytest-cov)
+# Active-la explicitement: `pytest --cov` ou `pytest --cov=almanach`.
+# (On ne met pas --cov par défaut pour éviter de ralentir les boucles courtes.)
+
+# Parallélisation (plugin: pytest-xdist)
+# Active-la explicitement: `pytest -n auto`.
+
+markers = [
+    "slow: tests lents",
+    "integration: tests d'integration",
+]
+
+xfail_strict = true
