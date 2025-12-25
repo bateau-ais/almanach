@@ -60,11 +60,8 @@ class Subscriber:
             "Scheduler is not implemented yet. You cannot use more than one pipeline at a time."
         )
 
-        if n := len(self._pipelines):
-            log.info(f"Running {n} pipeline{'' if n == 1 else 's'}...")
-        else:
-            log.fatal(msg := "No pipelines were defined.")
-            raise Exception(msg)
+        n = len(self._pipelines)
+        log.info(f"Running {n} pipeline{'' if n == 1 else 's'}...")
 
         pipeline = self._pipelines[0]
         asyncio.run(pipeline())
