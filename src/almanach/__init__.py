@@ -1,3 +1,3 @@
-from . import subscription
+from .subscription import AlmanachSubscriber
 
-__all__ = [""]
+__all__ = ["AlmanachSubscriber"]
