@@ -1,0 +1,80 @@
+[project]
+name = "almanach"
+description = "Interface lib for all bateau-ais projects."
+readme = "README.md"
+authors = [
+    { name = "Safenein", email = "safenein@cavernum.ovh" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "msgpack>=1.1.2",
+    "nats-py>=2.12.0",
+    "pydantic>=2.12.4",
+]
+dynamic = ["version"]
+
+[build-system]
+requires = ["hatchling>=1.27.0", "versioningit", "editables>=0.5"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ipython>=9.8.0",
+    "pyrefly>=0.41.0",
+    "pytest-check>=2.6.0",
+    "pytest-clarity>=1.0.1",
+    "pytest-cov>=7.0.0",
+    "pytest-docfiles>=0.2.0",
+    "pytest-metadata>=3.1.1",
+    "pytest-mock>=3.15.1",
+    "pytest-sugar>=1.1.1",
+    "pytest-watch>=4.2.0",
+    "pytest-watcher>=0.4.3",
+    "pytest-xdist>=3.8.0",
+    "pytest>=9.0.0",
+    "setuptools>=80.9.0",
+    "syrupy>=5.0.0",
+    "versioningit>=3.3.0",
+]
+
+[tool.versioningit]
+default-version = "0.0.0"
+
+[tool.hatch.version]
+source = "versioningit"
+
+[tool.versioningit.next-version]
+method = "smallest"
+
+[tool.versioningit.format]
+distance = "{next_version}.dev{distance}+{vcs}{rev}"
+dirty = "{base_version}+d{build_date:%Y%m%d}"
+distance-dirty = "{next_version}.dev{distance}+{vcs}{rev}.d{build_date:%Y%m%d}"
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+norecursedirs = [".git", ".devenv", ".direnv", "dist", "build"]
+
+# Options générales (plugins: pytest-sugar, pytest-clarity)
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+    "--showlocals",
+]
+
+# Couverture (plugin: pytest-cov)
+# Active-la explicitement: `pytest --cov` ou `pytest --cov=almanach`.
+# (On ne met pas --cov par défaut pour éviter de ralentir les boucles courtes.)
+
+# Parallélisation (plugin: pytest-xdist)
+# Active-la explicitement: `pytest -n auto`.
+
+markers = [
+    "slow: tests lents",
+    "integration: tests d'integration",
+]
+
+xfail_strict = true
