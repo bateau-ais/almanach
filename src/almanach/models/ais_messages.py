@@ -93,6 +93,12 @@ class EnrichedAISMessage(ParsedAISMessage):
     time_in_zone: Optional[int] = Field(None, ge=0, description="Time spent in current zone (minutes)")
     recent_anomaly_count: int = Field(default=0, ge=0, description="Count of recent anomalies")
     
+    # Historical frames for temporal analysis
+    previous_frames: Optional[list[dict]] = Field(
+        default=None,
+        description="Previous N AIS frames for temporal pattern analysis (optional, from Enricher)"
+    )
+    
     @field_validator('avg_heading_historical')
     @classmethod
     def normalize_heading(cls, v: float) -> float:
