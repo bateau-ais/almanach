@@ -72,17 +72,57 @@ class EnrichedAISMessage(ParsedAISMessage):
     Consommé par : Analyzer
     
     Ajoute des statistiques calculées sur historique et contexte de navigation.
+    
+    Version 2.0 Changes:
+    - Delta fields now Optional (None on first message)
+    - Added is_first_message flag for cold start handling
+    - Added new computed fields: delta_time, delta_distance, turn_rate, speed_correlation
     """
     
     # Trajectory identification
     trajectory_id: str = Field(..., description="Trajectory/route identifier")
     
-    # Deltas (changes from previous message)
-    delta_sog: float = Field(..., description="Change in speed since last message (knots)")
-    delta_cog: float = Field(..., description="Change in course since last message (degrees)")
-    acceleration: float = Field(..., description="Acceleration (knots/minute)")
+    # Cold start flag
+    is_first_message: bool = Field(
+        default=False,
+        description="True if this is the first message for this MMSI (no previous data)"
+    )
     
-    # Historical statistics
+    # Deltas (changes from previous message) - now Optional
+    delta_sog: Optional[float] = Field(
+        None,
+        description="Change in speed since last message (knots, None on first message)"
+    )
+    delta_cog: Optional[float] = Field(
+        None,
+        description="Change in course since last message (degrees, None on first message)"
+    )
+    acceleration: Optional[float] = Field(
+        None,
+        description="Acceleration (knots/minute, None on first message)"
+    )
+    
+    # New temporal and spatial deltas
+    delta_time: Optional[float] = Field(
+        None,
+        description="Time elapsed since last message (seconds, None on first message)"
+    )
+    delta_distance: Optional[float] = Field(
+        None,
+        description="Distance traveled since last message (meters, Haversine, None on first message)"
+    )
+    
+    # New kinematic fields
+    turn_rate: Optional[float] = Field(
+        None,
+        description="Rate of turn (degrees/minute, None on first message)"
+    )
+    speed_correlation: Optional[float] = Field(
+        None,
+        description="Ratio of actual distance/theoretical distance from SOG (1.0=perfect, None on first message)"
+    )
+    
+    # Historical statistics (always present)
     avg_speed_historical: float = Field(..., ge=0.0, description="Historical average speed (knots)")
     avg_heading_historical: float = Field(..., ge=0.0, lt=360.0, description="Historical average heading (degrees)")
     velocity_variance_30m: float = Field(..., ge=0.0, description="Velocity variance over 30min window (knots²)")
@@ -104,6 +144,7 @@ class EnrichedAISMessage(ParsedAISMessage):
     def normalize_heading(cls, v: float) -> float:
         """Normalize heading to [0, 360)"""
         return v % 360.0
+
 
 
 class AnalysisResult(BaseModel):
