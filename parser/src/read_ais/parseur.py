@@ -62,6 +62,8 @@ class AIS_data:
         self.durationminutes = None
         self.vesselgroup = None
         self.cargo = None
+
+        self.error = False  # indique si une erreur a été détectée lors de la vérification des valeurs
     
     def parse_from_csv_raw(self, raw_frame: Series):
         """
@@ -85,11 +87,15 @@ class AIS_data:
         if not pd.isna(raw_frame['imonumber']):
             self.imo = int(float(raw_frame['imonumber']))
 
-        self.callsign = raw_frame['callsign']
-        self.name = raw_frame['name']
+        if not pd.isna(raw_frame['callsign']):
+            self.callsign = raw_frame['callsign']
 
-        if '-' in str(raw_frame['vesseltype']):
-            self.vesseltype = int(str(raw_frame['vesseltype']).split('-')[0])
+        if not pd.isna(raw_frame['name']):
+            self.name = raw_frame['name']
+
+        if not pd.isna(raw_frame['vesseltype']):
+            if '-' in str(raw_frame['vesseltype']):
+                self.vesseltype = int(str(raw_frame['vesseltype']).split('-')[0])
 
         # draft not present
         # destination not present
@@ -97,18 +103,22 @@ class AIS_data:
         # trackstarttime not present
         # trackendtime not present
         
-        self.length = float(raw_frame['length'])
-        self.width = float(raw_frame['beam'])  # assuming beam is width
+        if not pd.isna(raw_frame['length']):
+            self.length = float(raw_frame['length'])
+        
+        if not pd.isna(raw_frame['beam']):
+            self.width = float(raw_frame['beam'])  # assuming beam is width
 
         # durationminutes not present
         # vesselgroup not present
 
-        self.cargo = raw_frame['cargo']
+        if not pd.isna(raw_frame['cargo']):
+            self.cargo = raw_frame['cargo']
 
         try:
             self.check_values()  # TODO: gestion des erreurs si valeurs hors plage pour passer à la trame suivante sans bloquage
         except ValueError as e:
-            print(f"Erreur de valeur dans la trame AIS pour le MMSI {self.mmsi} : {e}")  # TODO: logger à la place de print
+            self.error = True  # une erreur dans les valeurs
         
         return self
     
