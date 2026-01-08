@@ -5,7 +5,7 @@ readme = "README.md"
 authors = [
     { name = "Safenein", email = "safenein@cavernum.ovh" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "msgpack>=1.1.2",
     "nats-py>=2.12.0",
