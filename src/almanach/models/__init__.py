@@ -5,18 +5,14 @@ Almanach Models
 Shared Pydantic models for NOVA pipeline.
 """
 
-from .ais_messages import (
-    BaseAISMessage,
-    ParsedAISMessage,
-    EnrichedAISMessage,
+from .ais_messages import AisMessage
+from .kpi import (
     AnalysisResult,
     DetectionMetrics,
 )
 
 __all__ = [
-    'BaseAISMessage',
-    'ParsedAISMessage',
-    'EnrichedAISMessage',
-    'AnalysisResult',
-    'DetectionMetrics',
+    "AisMessage",
+    "AnalysisResult",
+    "DetectionMetrics",
 ]
