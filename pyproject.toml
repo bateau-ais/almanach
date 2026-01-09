@@ -78,3 +78,6 @@ markers = [
 ]
 
 xfail_strict = true
+
+[tool.ruff]
+line-length = 120
