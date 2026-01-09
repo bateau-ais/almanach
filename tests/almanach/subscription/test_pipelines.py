@@ -20,9 +20,7 @@ class _FakeNatsClient:
         self.subscriptions: list[_SubCall] = []
         self.flushed = 0
 
-    async def subscribe(
-        self, subject: str, cb: Callable[[Any], Awaitable[None]]
-    ) -> None:
+    async def subscribe(self, subject: str, cb: Callable[[Any], Awaitable[None]]) -> None:
         self.subscriptions.append(_SubCall(subject=subject, cb=cb))
 
     async def flush(self) -> None:
@@ -49,8 +47,11 @@ def test_pipeline_multiple_hosts_not_implemented(
     monkeypatch.setattr(pipelines.nats, "connect", fake_connect)
     monkeypatch.setattr(pipelines.asyncio, "Event", _FakeEvent)
 
-    p = pipelines.Pipeline(
-        lambda raw: raw, lambda _obj: None, _topic("a", "s"), _topic("b", "s")
+    p = pipelines.JoinPipeline(
+        {"source": [_topic("a", "s"), _topic("b", "s")]},
+        lambda raw: raw,
+        lambda _obj: None,
+        key="msg_uuid",
     )
 
     with pytest.raises(NotImplementedError, match="Multiple host"):
@@ -71,29 +72,32 @@ def test_pipeline_subscribes_flushes_and_handler_calls(
 
     received: list[int] = []
 
-    def validator(raw: Any) -> int:
-        return int(raw["a"])
+    def validator(raw: dict[str, object]) -> int:
+        return int(raw["a"])  # type: ignore[arg-type]
 
     def callback(obj: int) -> None:
         received.append(obj)
 
-    p = pipelines.Pipeline(validator, callback, _topic("localhost", "foo"))
+    p = pipelines.JoinPipeline(
+        {"source": [_topic("localhost", "foo")]},
+        validator,
+        callback,
+        key="msg_uuid",
+    )
     asyncio.run(p())
 
     assert fake_client.flushed == 1
     assert [s.subject for s in fake_client.subscriptions] == ["foo"]
 
-    msg = SimpleNamespace(
-        data=msgpack.packb({"a": 7}, use_bin_type=True), subject="foo", reply=""
-    )
+    msg = SimpleNamespace(data=msgpack.packb({"a": 7}, use_bin_type=True), subject="foo", reply="")
     asyncio.run(fake_client.subscriptions[0].cb(msg))
 
     assert received == [7]
 
 
-def test_aggregate_pipeline_requires_sources() -> None:
+def test_join_pipeline_requires_sources() -> None:
     with pytest.raises(ValueError, match="At least one source"):
-        pipelines.AggregatePipeline({}, lambda _: None, lambda _: None, key="msg_uuid")
+        pipelines.JoinPipeline({}, lambda _: None, lambda _: None, key="msg_uuid")
 
 
 def test_aggregate_pipeline_multiple_hosts_not_implemented(
@@ -101,7 +105,7 @@ def test_aggregate_pipeline_multiple_hosts_not_implemented(
 ) -> None:
     monkeypatch.setattr(pipelines.asyncio, "Event", _FakeEvent)
 
-    ap = pipelines.AggregatePipeline(
+    ap = pipelines.JoinPipeline(
         {"raw": [_topic("a", "raw")], "enriched": [_topic("b", "enriched")]},
         lambda payload: payload,
         lambda _obj: None,
@@ -132,7 +136,7 @@ def test_aggregate_pipeline_subscribes_joins_and_calls_callback(
     def callback(obj: dict[str, object]) -> None:
         received.append(obj)
 
-    ap = pipelines.AggregatePipeline(
+    ap = pipelines.JoinPipeline(
         {
             "raw": [_topic("localhost", "raw")],
             "enriched": [_topic("localhost", "enriched")],

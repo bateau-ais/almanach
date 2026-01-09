@@ -31,7 +31,7 @@ class _FakePipeline:
         return _coro()
 
 
-class _FakeAggregatePipeline:
+class _FakeJoinPipeline:
     def __init__(
         self,
         sources: Mapping[str, list[str]],
@@ -39,14 +39,11 @@ class _FakeAggregatePipeline:
         callback: Callable[[object], None],
         *,
         key: str,
-        build: Callable[[Mapping[str, Mapping[str, object]]], Mapping[str, object]]
-        | None = None,
     ):
         self.sources = dict(sources)
         self.validator = validator
         self.callback = callback
         self.key = key
-        self.build = build
 
     def __call__(self):
         async def _coro() -> None:
@@ -68,7 +65,7 @@ def test_subscribe_rejects_topics_and_sources() -> None:
 
 
 def test_subscribe_positional_creates_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(subscriber_mod, "Pipeline", _FakePipeline)
+    monkeypatch.setattr(subscriber_mod, "JoinPipeline", _FakeJoinPipeline)
 
     sub = subscriber_mod.Subscriber()
 
@@ -85,16 +82,17 @@ def test_subscribe_positional_creates_pipeline(monkeypatch: pytest.MonkeyPatch) 
     assert len(sub._pipelines) == 1
 
     pipeline = sub._pipelines[0]
-    assert isinstance(pipeline, _FakePipeline)
+    assert isinstance(pipeline, _FakeJoinPipeline)
     assert pipeline.validator is validator
     assert pipeline.callback is callback
-    assert pipeline.topics == (_topic("foo"),)
+    assert pipeline.key == "msg_uuid"
+    assert pipeline.sources == {"source": [_topic("foo")]}
 
 
 def test_subscribe_sources_creates_aggregate_pipeline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(subscriber_mod, "AggregatePipeline", _FakeAggregatePipeline)
+    monkeypatch.setattr(subscriber_mod, "JoinPipeline", _FakeJoinPipeline)
 
     sub = subscriber_mod.Subscriber()
 
@@ -104,16 +102,9 @@ def test_subscribe_sources_creates_aggregate_pipeline(
     def callback(obj: object) -> None:
         assert obj is not None
 
-    def build(parts: Mapping[str, Mapping[str, object]]) -> Mapping[str, object]:
-        merged: dict[str, object] = {}
-        for _name, piece in parts.items():
-            merged.update(piece)
-        return merged
-
     decorator = sub.subscribe(
         validator=validator,
         key="msg_uuid",
-        build=build,
         raw=[_topic("raw")],
         enriched=[_topic("enriched")],
     )
@@ -121,14 +112,13 @@ def test_subscribe_sources_creates_aggregate_pipeline(
 
     assert len(sub._pipelines) == 1
     pipeline = sub._pipelines[0]
-    assert isinstance(pipeline, _FakeAggregatePipeline)
+    assert isinstance(pipeline, _FakeJoinPipeline)
 
     assert set(pipeline.sources.keys()) == {"raw", "enriched"}
     assert pipeline.sources["raw"] == [_topic("raw")]
     assert pipeline.sources["enriched"] == [_topic("enriched")]
 
     assert pipeline.key == "msg_uuid"
-    assert pipeline.build is build
 
 
 def test_run_requires_one_pipeline() -> None:
@@ -137,12 +127,8 @@ def test_run_requires_one_pipeline() -> None:
     with pytest.raises(AssertionError, match="At least one pipeline"):
         sub.run()
 
-    sub._pipelines.append(
-        lambda: _FakePipeline(lambda: None, lambda _: None, _topic("foo"))()
-    )
-    sub._pipelines.append(
-        lambda: _FakePipeline(lambda: None, lambda _: None, _topic("bar"))()
-    )
+    sub._pipelines.append(lambda: _FakePipeline(lambda: None, lambda _: None, _topic("foo"))())
+    sub._pipelines.append(lambda: _FakePipeline(lambda: None, lambda _: None, _topic("bar"))())
 
     with pytest.raises(AssertionError, match="cannot use more than one pipeline"):
         sub.run()
