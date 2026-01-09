@@ -89,7 +89,7 @@ class BaseStation(BaseModel):
 # ============== MAIN MODEL ==============
 
 
-class AisMessage(BaseModel):
+class AisMessage(BaseModel, extra="ignore"):
     """
     Aggregated AIS message with optional sub-objects.
     Accepts flat dict input; sub-objects auto-populated if valid.
@@ -125,6 +125,3 @@ class AisMessage(BaseModel):
                 except ValidationError:
                     pass
         return data
-
-    class Config:
-        extra = "ignore"
