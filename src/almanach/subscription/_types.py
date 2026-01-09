@@ -1,44 +1,19 @@
-from typing import Annotated, Mapping, cast
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Annotated
 
 from pydantic import AnyUrl, TypeAdapter, UrlConstraints
 
-Topic = Annotated[
+type Topic = Annotated[
     AnyUrl,
-    "Type to validate topic format.",
-    UrlConstraints(
-        allowed_schemes=["nats"],  # TODO: Allow for more schemes
-        host_required=True,
-        default_port=4222,
-    ),
+    "NATS topic URL like nats://host:4222/subject",
+    UrlConstraints(allowed_schemes=["nats"], host_required=True, default_port=4222),
 ]
 
+_TOPIC = TypeAdapter(Topic)
 
-def validate_topic(value: object) -> Topic:
-    return TypeAdapter(Topic).validate_python(value)
-
-
-def server_from_topic(topic: Topic) -> str:
-    host = topic.host
-    if host is None:
-        raise ValueError("Topic host is required")
-    port = topic.port or 4222
-    scheme = topic.scheme or "nats"
-    return f"{scheme}://{host}:{port}"
-
-
-def subject_from_topic(topic: Topic) -> str:
-    subject = (topic.path or "").lstrip("/")
-    if not subject:
-        raise ValueError("Topic path/subject is required")
-    return subject
-
-
-def coerce_str(value: object) -> str:
-    if isinstance(value, str):
-        return value
-    if isinstance(value, bytes):
-        return value.decode("utf-8")
-    raise TypeError("Expected str/bytes")
+topic = _TOPIC.validate_python
 
 
 def coerce_mapping(value: object) -> dict[str, object]:
@@ -47,5 +22,9 @@ def coerce_mapping(value: object) -> dict[str, object]:
 
     out: dict[str, object] = {}
     for k, v in value.items():
-        out[coerce_str(cast(object, k))] = cast(object, v)
+        if isinstance(k, bytes):
+            k = k.decode("utf-8")
+        if not isinstance(k, str):
+            raise TypeError("Expected str/bytes")
+        out[k] = v
     return out

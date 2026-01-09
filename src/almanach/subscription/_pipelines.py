@@ -1,62 +1,46 @@
+from __future__ import annotations
+
 import asyncio
-from itertools import groupby
-from typing import Awaitable, Callable, Mapping, cast
+from collections.abc import Awaitable, Callable, Mapping
+from typing import Protocol, cast
 
 import msgpack  # type: ignore[import-not-found]
 import nats  # type: ignore[import-not-found]
 
-from ._nats_protocols import NatsMsg
-from ._types import (
-    Topic,
-    coerce_mapping,
-    server_from_topic,
-    subject_from_topic,
-    validate_topic,
-)
+from ._types import Topic, coerce_mapping, topic
 from .defragment import JoinDefragmenter
 
 type NatsClient = nats.NATS
 
 
-class Pipeline[Raw, T]:
-    def __init__(
-        self,
-        validator: Callable[[Raw], T],
-        callback: Callable[[T], None],
-        *topics: Topic,
-    ):
-        self._topics: list[Topic] = [validate_topic(x) for x in topics]
-        self._validator = validator
-        self._callback = callback
-        self._nc: NatsClient | None = None
-
-    async def __call__(self) -> None:
-        topics = sorted(self._topics, key=server_from_topic)
-        for server, grp in groupby(topics, key=server_from_topic):
-            if self._nc is not None:
-                raise NotImplementedError(
-                    "Multiple host sources are not implemented yet."
-                )
-            urls = list(grp)
-
-            self._nc = await nats.connect(server)
-            assert self._nc is not None
-
-            async def handler(msg: NatsMsg) -> None:
-                raw = cast(Raw, msgpack.unpackb(msg.data))
-                obj = self._validator(raw)
-                self._callback(obj)
-
-            for url in urls:
-                url = validate_topic(url)
-                subject = subject_from_topic(url)
-                await self._nc.subscribe(subject, cb=handler)
-
-            await self._nc.flush()
-            await asyncio.Event().wait()
+class NatsMsg(Protocol):
+    data: bytes
+    subject: str
+    reply: str
 
 
-class AggregatePipeline[T]:
+def _server(topic: Topic) -> str:
+    host = topic.host
+    if host is None:
+        raise ValueError("Topic host is required")
+    return f"{topic.scheme or 'nats'}://{host}:{topic.port or 4222}"
+
+
+def _subject(topic: Topic) -> str:
+    subject = (topic.path or "").lstrip("/")
+    if not subject:
+        raise ValueError("Topic path/subject is required")
+    return subject
+
+
+class JoinPipeline[T]:
+    """Single pipeline implementation.
+
+    - If one source: emits each payload as-is.
+    - If multiple sources: waits until all sources for a key exist, then merges.
+    Merge strategy is fixed (source-order overlay).
+    """
+
     def __init__(
         self,
         sources: Mapping[str, list[Topic]],
@@ -64,58 +48,56 @@ class AggregatePipeline[T]:
         callback: Callable[[T], None],
         *,
         key: str,
-        build: Callable[[Mapping[str, Mapping[str, object]]], Mapping[str, object]]
-        | None = None,
     ):
         if not sources:
             raise ValueError("At least one source must be provided")
 
-        self._sources: dict[str, list[Topic]] = {
-            name: [validate_topic(x) for x in topics]
-            for name, topics in sources.items()
-        }
+        self._sources: dict[str, list[Topic]] = {name: [topic(t) for t in topics] for name, topics in sources.items()}
         self._validator = validator
         self._callback = callback
-        self._key = key
-        self._nc: NatsClient | None = None
         self._lock = asyncio.Lock()
-        self._join = JoinDefragmenter(
-            list(self._sources.keys()),
-            key=self._key,
-            build=build,
-        )
+
+        source_order = list(self._sources.keys())
+        self._single_source = len(source_order) == 1
+
+        def build(parts: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
+            merged: dict[str, object] = {}
+            for s in source_order:
+                p = parts.get(s)
+                if p is not None:
+                    merged.update(p)
+            return merged
+
+        self._join = None if self._single_source else JoinDefragmenter(source_order, key=key, build=build)
+        self._nc: NatsClient | None = None
 
     async def __call__(self) -> None:
-        all_topics: list[Topic] = [
-            t for topics in self._sources.values() for t in topics
-        ]
-        servers = {server_from_topic(t) for t in all_topics}
+        all_topics = [t for ts in self._sources.values() for t in ts]
+        servers = {_server(t) for t in all_topics}
         if len(servers) != 1:
             raise NotImplementedError("Multiple host sources are not implemented yet.")
-        server = next(iter(servers))
 
-        self._nc = await nats.connect(server)
+        self._nc = await nats.connect(next(iter(servers)))
         assert self._nc is not None
 
         def _mk_handler(source_name: str) -> Callable[[NatsMsg], Awaitable[None]]:
             async def handler(msg: NatsMsg) -> None:
-                payload_raw = cast(object, msgpack.unpackb(msg.data))
-                payload = coerce_mapping(payload_raw)
+                payload = coerce_mapping(cast(object, msgpack.unpackb(msg.data)))
+                if self._join is None:
+                    self._callback(self._validator(payload))
+                    return
 
                 async with self._lock:
                     completed = self._join.push(source_name, payload)
-
                 for merged in completed:
-                    obj = self._validator(merged)
-                    self._callback(obj)
+                    self._callback(self._validator(merged))
 
             return handler
 
         for source_name, topics in self._sources.items():
             handler = _mk_handler(source_name)
-            for topic in topics:
-                subject = subject_from_topic(topic)
-                await self._nc.subscribe(subject, cb=handler)
+            for t in topics:
+                await self._nc.subscribe(_subject(t), cb=handler)
 
         await self._nc.flush()
         await asyncio.Event().wait()
