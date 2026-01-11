@@ -10,9 +10,11 @@ from .kpi import (
     AnalysisResult,
     DetectionMetrics,
 )
+from .types import Topic
 
 __all__ = [
     "AisMessage",
     "AnalysisResult",
     "DetectionMetrics",
+    "Topic",
 ]

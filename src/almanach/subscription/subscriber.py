@@ -2,8 +2,7 @@ import asyncio
 import logging
 from typing import Callable, Mapping
 
-from ._pipelines import JoinPipeline
-from ._types import Topic
+from ._pipelines import JoinPipeline, Topic
 
 
 class Subscriber:

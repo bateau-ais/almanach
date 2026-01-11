@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Protocol, cast
+from typing import Protocol
 
 import msgpack  # type: ignore[import-not-found]
 import nats  # type: ignore[import-not-found]
+from pydantic import TypeAdapter
 
-from ._types import Topic, coerce_mapping, topic
+from ..models.types import Topic
 from .defragment import JoinDefragmenter
 
 type NatsClient = nats.NATS
+
+
+topic = TypeAdapter(Topic).validate_python
 
 
 class NatsMsg(Protocol):
@@ -82,13 +86,23 @@ class JoinPipeline[T]:
 
         def _mk_handler(source_name: str) -> Callable[[NatsMsg], Awaitable[None]]:
             async def handler(msg: NatsMsg) -> None:
-                payload = coerce_mapping(cast(object, msgpack.unpackb(msg.data)))
+                raw = msgpack.unpackb(msg.data, raw=False)
+                if not isinstance(raw, Mapping):
+                    raise TypeError("Expected msgpack payload to be a mapping")
+
+                payload_dict: dict[str, object] = {}
+                for k, v in raw.items():
+                    if not isinstance(k, str):
+                        raise TypeError("Expected msgpack mapping to have str keys")
+                    payload_dict[k] = v
+
+                payload = self._validator(payload_dict)
                 if self._join is None:
-                    self._callback(self._validator(payload))
+                    self._callback(payload)
                     return
 
                 async with self._lock:
-                    completed = self._join.push(source_name, payload)
+                    completed = self._join.push(source_name, payload_dict)
                 for merged in completed:
                     self._callback(self._validator(merged))
 
