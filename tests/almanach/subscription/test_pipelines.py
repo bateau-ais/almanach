@@ -51,7 +51,6 @@ def test_pipeline_multiple_hosts_not_implemented(
         {"source": [_topic("a", "s"), _topic("b", "s")]},
         lambda raw: raw,
         lambda _obj: None,
-        key="msg_uuid",
     )
 
     with pytest.raises(NotImplementedError, match="Multiple host"):
@@ -82,7 +81,6 @@ def test_pipeline_subscribes_flushes_and_handler_calls(
         {"source": [_topic("localhost", "foo")]},
         validator,
         callback,
-        key="msg_uuid",
     )
     asyncio.run(p())
 
@@ -97,7 +95,16 @@ def test_pipeline_subscribes_flushes_and_handler_calls(
 
 def test_join_pipeline_requires_sources() -> None:
     with pytest.raises(ValueError, match="At least one source"):
-        pipelines.JoinPipeline({}, lambda _: None, lambda _: None, key="msg_uuid")
+        pipelines.JoinPipeline({}, lambda _: None, lambda _: None)
+
+
+def test_join_pipeline_multi_source_requires_key() -> None:
+    with pytest.raises(TypeError, match="key is required"):
+        pipelines.JoinPipeline(
+            {"raw": [_topic("localhost", "raw")], "enriched": [_topic("localhost", "enriched")]},
+            lambda payload: payload,
+            lambda _obj: None,
+        )
 
 
 def test_aggregate_pipeline_multiple_hosts_not_implemented(

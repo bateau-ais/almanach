@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Protocol
 
 import msgpack  # type: ignore[import-not-found]
 import nats  # type: ignore[import-not-found]
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from ..models.types import Topic
 from .defragment import JoinDefragmenter
@@ -87,44 +88,108 @@ class JoinPipeline[T]:
             assert isinstance(key, str)
             self._join = JoinDefragmenter(source_order, key=key, build=build)
         self._nc: NatsClient | None = None
+        self._log = logging.getLogger(".".join((__name__, self.__class__.__name__)))
 
     async def __call__(self) -> None:
+        self._log.info(
+            "Starting pipeline",
+            extra={"sources": list(self._sources.keys()), "single_source": self._single_source},
+        )
         all_topics = [t for ts in self._sources.values() for t in ts]
         servers = {_server(t) for t in all_topics}
         if len(servers) != 1:
+            self._log.error(
+                "Multiple NATS hosts not supported",
+                extra={"servers": sorted(servers)},
+            )
             raise NotImplementedError("Multiple host sources are not implemented yet.")
 
-        self._nc = await nats.connect(next(iter(servers)))
+        server = next(iter(servers))
+        self._log.info("Connecting to NATS", extra={"server": server})
+        try:
+            self._nc = await nats.connect(server)
+        except Exception:
+            self._log.exception("Failed to connect to NATS", extra={"server": server})
+            raise
         assert self._nc is not None
+        self._log.info("Connected to NATS", extra={"server": server})
 
         def _mk_handler(source_name: str) -> Callable[[NatsMsg], Awaitable[None]]:
             async def handler(msg: NatsMsg) -> None:
-                raw = msgpack.unpackb(msg.data, raw=False)
-                if not isinstance(raw, Mapping):
-                    raise TypeError("Expected msgpack payload to be a mapping")
+                try:
+                    raw = msgpack.unpackb(msg.data, raw=False)
+                    if not isinstance(raw, Mapping):
+                        raise TypeError("Expected msgpack payload to be a mapping")
 
-                payload_dict: dict[str, object] = {}
-                for k, v in raw.items():
-                    if not isinstance(k, str):
-                        raise TypeError("Expected msgpack mapping to have str keys")
-                    payload_dict[k] = v
+                    payload_dict: dict[str, object] = {}
+                    for k, v in raw.items():
+                        if not isinstance(k, str):
+                            raise TypeError("Expected msgpack mapping to have str keys")
+                        payload_dict[k] = v
 
-                payload = self._validator(payload_dict)
-                if self._join is None:
-                    self._callback(payload)
-                    return
+                    try:
+                        payload = self._validator(payload_dict)
+                    except (ValidationError, ValueError, TypeError) as exc:
+                        # A bad payload should not crash the subscriber.
+                        self._log.warning(
+                            "Message failed validation",
+                            extra={
+                                "source": source_name,
+                                "subject": getattr(msg, "subject", None),
+                                "error_type": type(exc).__name__,
+                                "error": str(exc),
+                                "size_bytes": len(getattr(msg, "data", b"")),
+                            },
+                        )
+                        return
+                    if self._join is None:
+                        self._callback(payload)
+                        return
 
-                async with self._lock:
-                    completed = self._join.push(source_name, payload_dict)
-                for merged in completed:
-                    self._callback(self._validator(merged))
+                    async with self._lock:
+                        completed = self._join.push(source_name, payload_dict)
+
+                    if completed:
+                        self._log.debug(
+                            "Join completed",
+                            extra={"source": source_name, "completed": len(completed)},
+                        )
+
+                    for merged in completed:
+                        try:
+                            self._callback(self._validator(merged))
+                        except (ValidationError, ValueError, TypeError) as exc:
+                            self._log.warning(
+                                "Joined message failed validation",
+                                extra={
+                                    "source": source_name,
+                                    "error_type": type(exc).__name__,
+                                    "error": str(exc),
+                                },
+                            )
+                except Exception:
+                    # Keep pipeline alive; bad payloads should not crash the subscriber.
+                    self._log.exception(
+                        "Message handling failed",
+                        extra={
+                            "source": source_name,
+                            "subject": getattr(msg, "subject", None),
+                            "size_bytes": len(getattr(msg, "data", b"")),
+                        },
+                    )
 
             return handler
 
         for source_name, topics in self._sources.items():
             handler = _mk_handler(source_name)
             for t in topics:
-                await self._nc.subscribe(_subject(t), cb=handler)
+                subject = _subject(t)
+                self._log.info(
+                    "Subscribing to subject",
+                    extra={"source": source_name, "subject": subject},
+                )
+                await self._nc.subscribe(subject, cb=handler)
 
         await self._nc.flush()
+        self._log.info("Subscriptions ready")
         await asyncio.Event().wait()

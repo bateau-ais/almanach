@@ -38,7 +38,7 @@ class _FakeJoinPipeline:
         validator: Callable[[Mapping[str, object]], object],
         callback: Callable[[object], None],
         *,
-        key: str,
+        key: str | None = None,
     ):
         self.sources = dict(sources)
         self.validator = validator
@@ -87,6 +87,38 @@ def test_subscribe_positional_creates_pipeline(monkeypatch: pytest.MonkeyPatch) 
     assert pipeline.callback is callback
     assert pipeline.key == "msg_uuid"
     assert pipeline.sources == {"source": [_topic("foo")]}
+
+
+def test_subscribe_single_topic_key_is_optional(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(subscriber_mod, "JoinPipeline", _FakeJoinPipeline)
+
+    sub = subscriber_mod.Subscriber()
+
+    def validator(raw: object) -> object:
+        return raw
+
+    def callback(obj: object) -> None:
+        assert obj is not None
+
+    decorator = sub.subscribe(_topic("foo"), validator=validator)
+    decorator(callback)
+
+    assert len(sub._pipelines) == 1
+    pipeline = sub._pipelines[0]
+    assert isinstance(pipeline, _FakeJoinPipeline)
+    assert pipeline.key is None
+
+
+def test_subscribe_multiple_topics_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(subscriber_mod, "JoinPipeline", _FakeJoinPipeline)
+
+    sub = subscriber_mod.Subscriber()
+
+    def validator(raw: object) -> object:
+        return raw
+
+    with pytest.raises(TypeError, match="key is required"):
+        sub.subscribe(_topic("foo"), _topic("bar"), validator=validator)
 
 
 def test_subscribe_sources_creates_aggregate_pipeline(
