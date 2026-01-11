@@ -1,3 +1,4 @@
+from uuid import uuid4, UUID
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .enums import (
@@ -95,6 +96,7 @@ class AisMessage(BaseModel, extra="ignore"):
     Accepts flat dict input; sub-objects auto-populated if valid.
     """
 
+    msg_uuid: UUID = Field(..., default_factory=uuid4, description="UUID of the message.")
     mmsi: int = Field(
         ge=100000000,
         le=999999999,
