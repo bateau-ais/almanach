@@ -51,7 +51,7 @@ class JoinPipeline[T]:
         validator: Callable[[Mapping[str, object]], T],
         callback: Callable[[T], None],
         *,
-        key: str,
+        key: str | None = None,
     ):
         if not sources:
             raise ValueError("At least one source must be provided")
@@ -64,6 +64,15 @@ class JoinPipeline[T]:
         source_order = list(self._sources.keys())
         self._single_source = len(source_order) == 1
 
+        if self._single_source:
+            if key is not None and not isinstance(key, str):
+                raise TypeError("key must be a string")
+        else:
+            if key is None:
+                raise TypeError("key is required when joining more than one source")
+            if not isinstance(key, str):
+                raise TypeError("key must be a string")
+
         def build(parts: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
             merged: dict[str, object] = {}
             for s in source_order:
@@ -72,7 +81,11 @@ class JoinPipeline[T]:
                     merged.update(p)
             return merged
 
-        self._join = None if self._single_source else JoinDefragmenter(source_order, key=key, build=build)
+        if self._single_source:
+            self._join = None
+        else:
+            assert isinstance(key, str)
+            self._join = JoinDefragmenter(source_order, key=key, build=build)
         self._nc: NatsClient | None = None
 
     async def __call__(self) -> None:

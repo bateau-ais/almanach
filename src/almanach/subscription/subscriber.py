@@ -17,13 +17,24 @@ class Subscriber:
         self,
         *topics: Topic,
         validator: Callable[[Mapping[str, object]], T],
-        key: str,
+        key: str | None = None,
         **sources: list[Topic],
     ) -> Callable[[Callable[[T], None]], Callable[[T], None]]:
         log = logging.getLogger(".".join((__name__, self.__class__.__name__, "subsribe")))
 
         if topics and sources:
             raise TypeError("Use either positional topics or named sources, not both.")
+
+        n_sources = len(sources) if sources else (len(topics) if topics else 0)
+
+        if n_sources > 1:
+            if key is None:
+                raise TypeError("key is required when subscribing to more than one topic.")
+            if not isinstance(key, str):
+                raise TypeError("key must be a string.")
+        else:
+            if key is not None and not isinstance(key, str):
+                raise TypeError("key must be a string.")
 
         def subscribe_decorator(callback: Callable[[T], None]) -> Callable[[T], None]:
             if sources:
