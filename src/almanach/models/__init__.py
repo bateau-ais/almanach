@@ -11,10 +11,13 @@ from .kpi import (
     DetectionMetrics,
 )
 from .types import Topic
+from .serialize import to_msgpack, from_msgpack
 
 __all__ = [
     "AisMessage",
     "AnalysisResult",
     "DetectionMetrics",
     "Topic",
+    "to_msgpack",
+    "from_msgpack",
 ]

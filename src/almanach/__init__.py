@@ -1,8 +1,4 @@
-from .models import (
-    AisMessage,
-    AnalysisResult,
-    DetectionMetrics,
-)
+from .models import AisMessage, AnalysisResult, DetectionMetrics, from_msgpack, to_msgpack
 from .subscription import AlmanachSubscriber
 
 __all__ = [
@@ -10,4 +6,6 @@ __all__ = [
     "AnalysisResult",
     "DetectionMetrics",
     "AisMessage",
+    "to_msgpack",
+    "from_msgpack",
 ]
