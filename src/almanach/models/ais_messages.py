@@ -95,7 +95,11 @@ class AisMessage(BaseModel, extra="ignore"):
     Accepts flat dict input; sub-objects auto-populated if valid.
     """
 
-    mmsi: int = Field(ge=100000000, le=999999999, description="Maritime Mobile Service Identity (9 digits)")
+    mmsi: int = Field(
+        ge=100000000,
+        le=999999999,
+        description="Maritime Mobile Service Identity (9 digits)",
+    )
 
     position: Position | None = Field(None, description="Position and motion data")
     class_a: ClassA | None = Field(None, description="Class A specific dynamic data")
