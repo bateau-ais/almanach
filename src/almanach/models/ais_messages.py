@@ -37,7 +37,7 @@ class ClassA(BaseModel):
 class ClassB(BaseModel):
     """Class B specific flags (msg 18)"""
 
-    cs: bool = Field(description="Class B CS unit flag")
+    cs: bool | None = Field(None, description="Class B CS unit flag")
     display: bool | None = Field(None, description="Has display capability")
     dsc: bool | None = Field(None, description="DSC equipped")
     band: bool | None = Field(None, description="Can operate over entire marine band")
@@ -121,7 +121,9 @@ class AisMessage(BaseModel, extra="ignore"):
         for key, model in extensions.items():
             if data.get(key) is None:
                 try:
-                    data[key] = model.model_validate(data)
+                    candidate = model.model_validate(data)
+                    if any(v is not None for v in candidate.model_dump().values()):
+                        data[key] = candidate
                 except ValidationError:
                     pass
         return data
