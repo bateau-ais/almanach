@@ -7,7 +7,7 @@ def to_msgpack(model: BaseModel) -> bytes:
     Serialize a Pydantic model to MessagePack bytes.
     """
     # Convert the model to a dict first
-    model_dict = model.model_dump()
+    model_dict = model.model_dump(mode="json")
     return msgpack.packb(model_dict, use_bin_type=True)
 
 

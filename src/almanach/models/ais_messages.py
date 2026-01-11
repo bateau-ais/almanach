@@ -1,5 +1,7 @@
-from uuid import uuid4, UUID
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from datetime import datetime
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field, ValidationError, field_serializer, model_validator
 
 from .enums import (
     AidType,
@@ -97,6 +99,9 @@ class AisMessage(BaseModel, extra="ignore"):
     """
 
     msg_uuid: UUID = Field(..., default_factory=uuid4, description="UUID of the message.")
+    msg_time: datetime = Field(
+        ..., default_factory=datetime.now, description="Timestamp of the message creation.", init=False
+    )
     mmsi: int = Field(
         ge=100000000,
         le=999999999,
@@ -110,6 +115,10 @@ class AisMessage(BaseModel, extra="ignore"):
     voyage: Voyage | None = Field(None, description="Voyage related data")
     aton: AidToNavigation | None = Field(None, description="Aid to Navigation data")
     base_station: BaseStation | None = Field(None, description="Base station report data")
+
+    @field_serializer("msg_uuid")
+    def _serialize_msg_uuid(self, v: UUID) -> str:
+        return str(v)
 
     @model_validator(mode="before")
     @classmethod

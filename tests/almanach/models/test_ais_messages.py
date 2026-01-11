@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from almanach import AisMessage
+from almanach.models.serialize import from_msgpack, to_msgpack
 
 
 def test_ais_message_builds_submodels_from_flat_input_when_valid() -> None:
@@ -144,6 +145,15 @@ def test_ais_message_ignores_extra_fields() -> None:
     )
     assert msg.mmsi == 123456789
     assert not hasattr(msg, "unknown_field")
+
+
+def test_ais_message_msgpack_roundtrip_serializes_uuid() -> None:
+    msg = AisMessage.model_validate({"mmsi": 123456789})
+    packed = to_msgpack(msg)
+    restored = from_msgpack(AisMessage, packed)
+
+    assert restored.msg_uuid == msg.msg_uuid
+    assert restored.mmsi == msg.mmsi
 
 
 def test_ais_message_does_not_autopopulate_when_key_present_as_none() -> None:
