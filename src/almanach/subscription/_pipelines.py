@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Protocol
 
-import msgpack  # type: ignore[import-not-found]
-import nats  # type: ignore[import-not-found]
+import msgpack
+import nats
 from pydantic import TypeAdapter, ValidationError
 
 from ..models.types import Topic
@@ -50,7 +51,7 @@ class JoinPipeline[T]:
         self,
         sources: Mapping[str, list[Topic]],
         validator: Callable[[Mapping[str, object]], T],
-        callback: Callable[[T], None],
+        callback: Callable[[T], None] | Callable[[T], Awaitable[None]],
         *,
         key: str | None = None,
     ):
@@ -143,7 +144,9 @@ class JoinPipeline[T]:
                         )
                         return
                     if self._join is None:
-                        self._callback(payload)
+                        maybe_awaitable = self._callback(payload)
+                        if inspect.isawaitable(maybe_awaitable):
+                            await maybe_awaitable
                         return
 
                     async with self._lock:
@@ -157,7 +160,9 @@ class JoinPipeline[T]:
 
                     for merged in completed:
                         try:
-                            self._callback(self._validator(merged))
+                            maybe_awaitable = self._callback(self._validator(merged))
+                            if inspect.isawaitable(maybe_awaitable):
+                                await maybe_awaitable
                         except (ValidationError, ValueError, TypeError) as exc:
                             self._log.warning(
                                 "Joined message failed validation",

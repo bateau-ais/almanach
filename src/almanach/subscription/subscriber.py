@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 
 from ._pipelines import JoinPipeline, Topic
 
@@ -19,7 +19,9 @@ class Subscriber:
         validator: Callable[[Mapping[str, object]], T],
         key: str | None = None,
         **sources: list[Topic],
-    ) -> Callable[[Callable[[T], None]], Callable[[T], None]]:
+    ) -> Callable[
+        [Callable[[T], None] | Callable[[T], Awaitable[None]]], Callable[[T], None] | Callable[[T], Awaitable[None]]
+    ]:
         log = logging.getLogger(".".join((__name__, self.__class__.__name__, "subscribe")))
 
         if topics and sources:
@@ -36,7 +38,9 @@ class Subscriber:
             if key is not None and not isinstance(key, str):
                 raise TypeError("key must be a string.")
 
-        def subscribe_decorator(callback: Callable[[T], None]) -> Callable[[T], None]:
+        def subscribe_decorator(
+            callback: Callable[[T], None] | Callable[[T], Awaitable[None]],
+        ) -> Callable[[T], None] | Callable[[T], Awaitable[None]]:
             if sources:
                 srcs: dict[str, list[Topic]] = dict(sources)
                 log.info(
@@ -66,19 +70,14 @@ class Subscriber:
 
         return subscribe_decorator
 
-    def run(self) -> None:
+    async def run(self) -> None:
         log = logging.getLogger(".".join((__name__, self.__class__.__name__, "run")))
         assert len(self._pipelines) > 0, "At least one pipeline should be specified for service to run."
-        assert len(self._pipelines) == 1, (
-            "Scheduler is not implemented yet. You cannot use more than one pipeline at a time."
-        )
 
         n = len(self._pipelines)
         log.info("Running pipelines", extra={"pipeline_count": n})
-
-        pipeline = self._pipelines[0]
         try:
-            asyncio.run(pipeline())
+            await asyncio.gather(*(pipeline() for pipeline in self._pipelines))
         except KeyboardInterrupt:
             log.info("Subscriber interrupted")
             raise

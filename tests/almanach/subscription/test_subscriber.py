@@ -1,4 +1,4 @@
-import inspect
+import asyncio
 from collections.abc import Mapping
 from typing import Callable
 
@@ -89,6 +89,27 @@ def test_subscribe_positional_creates_pipeline(monkeypatch: pytest.MonkeyPatch) 
     assert pipeline.sources == {"source": [_topic("foo")]}
 
 
+def test_subscribe_allows_async_callback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(subscriber_mod, "JoinPipeline", _FakeJoinPipeline)
+
+    sub = subscriber_mod.Subscriber()
+
+    def validator(raw: object) -> object:
+        return raw
+
+    async def callback(obj: object) -> None:
+        assert obj is not None
+
+    decorator = sub.subscribe(_topic("foo"), validator=validator)
+    returned_callback = decorator(callback)
+
+    assert returned_callback is callback
+    assert len(sub._pipelines) == 1
+    pipeline = sub._pipelines[0]
+    assert isinstance(pipeline, _FakeJoinPipeline)
+    assert pipeline.callback is callback
+
+
 def test_subscribe_single_topic_key_is_optional(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(subscriber_mod, "JoinPipeline", _FakeJoinPipeline)
 
@@ -157,16 +178,10 @@ def test_run_requires_one_pipeline() -> None:
     sub = subscriber_mod.Subscriber()
 
     with pytest.raises(AssertionError, match="At least one pipeline"):
-        sub.run()
-
-    sub._pipelines.append(lambda: _FakePipeline(lambda: None, lambda _: None, _topic("foo"))())
-    sub._pipelines.append(lambda: _FakePipeline(lambda: None, lambda _: None, _topic("bar"))())
-
-    with pytest.raises(AssertionError, match="cannot use more than one pipeline"):
-        sub.run()
+        asyncio.run(sub.run())
 
 
-def test_run_calls_asyncio_run(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_awaits_pipeline() -> None:
     sub = subscriber_mod.Subscriber()
 
     class _PipelineFn:
@@ -184,18 +199,31 @@ def test_run_calls_asyncio_run(monkeypatch: pytest.MonkeyPatch) -> None:
     pipeline_fn = _PipelineFn()
     sub._pipelines.append(pipeline_fn)
 
-    captured: list[object] = []
-
-    def fake_asyncio_run(awaitable: object):
-        captured.append(awaitable)
-        if inspect.iscoroutine(awaitable):
-            awaitable.close()
-        return None
-
-    monkeypatch.setattr(subscriber_mod.asyncio, "run", fake_asyncio_run)
-
-    sub.run()
+    asyncio.run(sub.run())
 
     assert pipeline_fn.called == 1
-    assert len(captured) == 1
-    assert inspect.isawaitable(captured[0])
+
+
+def test_run_runs_all_pipelines() -> None:
+    sub = subscriber_mod.Subscriber()
+
+    class _PipelineFn:
+        def __init__(self):
+            self.called = 0
+
+        def __call__(self):
+            self.called += 1
+
+            async def _coro() -> None:
+                return None
+
+            return _coro()
+
+    p1 = _PipelineFn()
+    p2 = _PipelineFn()
+    sub._pipelines.extend([p1, p2])
+
+    asyncio.run(sub.run())
+
+    assert p1.called == 1
+    assert p2.called == 1
