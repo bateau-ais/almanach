@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID, uuid4
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError, field_serializer, model_validator
 
@@ -107,7 +108,7 @@ class AisMessage(BaseModel, extra="ignore"):
         le=999999999,
         description="Maritime Mobile Service Identity (9 digits)",
     )
-    extra_fields: dict[str, ...] = Field(
+    extra_fields: dict[str, Any] = Field(
         ..., default_factory=dict, description="Métadonnées pour un usage délégué aux autres modules"
     )
 
@@ -171,3 +172,30 @@ class AisMessage(BaseModel, extra="ignore"):
             if isinstance(sub, dict):
                 dumped.update(sub)
         return dumped
+
+
+# ============== ENRICHED MODEL ==============
+
+class EnrichedPosition(BaseModel):
+    delta_speed: float
+    delta_lat: float
+    delta_lon: float
+    delta_time: float | None
+    delta_course: float
+    acceleration: float | None
+    distance_haversine: float
+    theoretical_distance: float | None
+    speed_correlation: float | None
+
+class EnrichedMessage(BaseModel):
+    msg_uuid: UUID = Field(..., default_factory=uuid4, description="UUID of the message.")
+    msg_time: datetime = Field(
+        ..., default_factory=datetime.now, description="Timestamp of the message creation.", init=False
+    )
+    mmsi: int = Field(
+        ge=100000000,
+        le=999999999,
+        description="Maritime Mobile Service Identity (9 digits)",
+    )
+
+    position: EnrichedPosition
