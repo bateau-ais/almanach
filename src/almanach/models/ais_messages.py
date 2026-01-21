@@ -24,7 +24,7 @@ class Position(BaseModel):
     course: float = Field(ge=0.0, le=360.0, description="Course over ground in degrees")
     heading: int = Field(ge=0, le=511, description="True heading in degrees (511 = N/A)")
     accuracy: PositionAccuracy | None = Field(None, description="Position accuracy (0=low >10m, 1=high ≤10m)")
-    timestamp: int | None = Field(None, ge=0, le=63, description="UTC second when report was generated")
+    timestamp: datetime = Field(..., default_factory=datetime.now, ge=0, le=63, description="UTC second when report was generated")
     epfd: EPFDType | None = Field(None, description="Type of position fixing device")
 
 
