@@ -107,6 +107,9 @@ class AisMessage(BaseModel, extra="ignore"):
         le=999999999,
         description="Maritime Mobile Service Identity (9 digits)",
     )
+    extra_fields: dict[str, ...] = Field(
+        ..., default_factory=dict, description="Métadonnées pour un usage délégué aux autres modules"
+    )
 
     position: Position | None = Field(None, description="Position and motion data")
     class_a: ClassA | None = Field(None, description="Class A specific dynamic data")
