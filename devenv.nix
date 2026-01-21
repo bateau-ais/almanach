@@ -13,7 +13,7 @@
     uv = {
       enable = true;
       sync = {
-        enable = false;
+        enable = true;
       };
     };
     venv.enable = true;
