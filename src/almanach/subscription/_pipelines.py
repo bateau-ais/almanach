@@ -128,29 +128,41 @@ class JoinPipeline[T]:
                             raise TypeError("Expected msgpack mapping to have str keys")
                         payload_dict[k] = v
 
-                    try:
-                        payload = self._validator(payload_dict)
-                    except (ValidationError, ValueError, TypeError) as exc:
-                        # A bad payload should not crash the subscriber.
-                        self._log.warning(
-                            "Message failed validation",
-                            extra={
-                                "source": source_name,
-                                "subject": getattr(msg, "subject", None),
-                                "error_type": type(exc).__name__,
-                                "error": str(exc),
-                                "size_bytes": len(getattr(msg, "data", b"")),
-                            },
-                        )
-                        return
                     if self._join is None:
+                        try:
+                            payload = self._validator(payload_dict)
+                        except (ValidationError, ValueError, TypeError) as exc:
+                            # A bad payload should not crash the subscriber.
+                            self._log.warning(
+                                "Message failed validation",
+                                extra={
+                                    "source": source_name,
+                                    "subject": getattr(msg, "subject", None),
+                                    "error_type": type(exc).__name__,
+                                    "error": str(exc),
+                                    "size_bytes": len(getattr(msg, "data", b"")),
+                                },
+                            )
+                            return
                         maybe_awaitable = self._callback(payload)
                         if inspect.isawaitable(maybe_awaitable):
                             await maybe_awaitable
                         return
 
-                    async with self._lock:
-                        completed = self._join.push(source_name, payload_dict)
+                    try:
+                        async with self._lock:
+                            completed = self._join.push(source_name, payload_dict)
+                    except (ValueError, TypeError) as exc:
+                        self._log.warning(
+                            "Join key missing or invalid",
+                            extra={
+                                "source": source_name,
+                                "subject": getattr(msg, "subject", None),
+                                "error_type": type(exc).__name__,
+                                "error": str(exc),
+                            },
+                        )
+                        return
 
                     if completed:
                         self._log.debug(
