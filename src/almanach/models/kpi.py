@@ -1,49 +1,56 @@
-from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
+from typing import List
+
+from pydantic import BaseModel, Field, field_validator
 from uuid import UUID
 
 
-class AnalysisResult(BaseModel):
-    """
-    Résultat de détection d'anomalie (Topic: nova.analyzed).
-    
-    Produit par : Analyzer
-    Consommé par : Fusioner
-    
-    Contient la décision binaire d'anomalie plus scores détaillés.
-    """
-    
-    # Core identifiers (from input)
-    data_id: UUID
-    mmsi: int
-    timestamp: datetime
-    trajectory_id: str
-    
+class AnalysisPayload(BaseModel):
+    """Detailed analysis payload nested in the output message."""
+
     # Statistical scores
     zscore_velocity: float = Field(..., description="Z-score for velocity anomaly")
     zscore_heading: float = Field(..., description="Z-score for heading anomaly")
-    
+
     # Individual anomaly flags
     outlier_velocity: bool = Field(..., description="Velocity is statistical outlier")
     outlier_heading: bool = Field(..., description="Heading is statistical outlier")
     outlier_acceleration: bool = Field(default=False, description="Acceleration is excessive")
     outlier_zone: bool = Field(default=False, description="In unusual zone")
     outlier_pattern: bool = Field(default=False, description="Abnormal pattern detected")
-    
+
     # Final decision
     anomaly_detected: bool = Field(..., description="BINARY DECISION: Anomaly yes/no")
     anomaly_score: float = Field(..., ge=0.0, le=1.0, description="Overall anomaly score [0-1]")
-    anomaly_reasons: list[str] = Field(default_factory=list, description="List of triggered anomaly types")
-    
+    anomaly_reasons: List[str] = Field(default_factory=list, description="List of triggered anomaly types")
+
     # Confidence and metadata
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in detection [0-1]")
     analysis_time_ms: int = Field(..., ge=0, description="Processing time (milliseconds)")
-    
+
     # Individual category scores for detailed analysis
-    category_scores: Optional[dict[str, float]] = Field(
+    category_scores: dict | None = Field(
         default=None,
         description="Detailed scores per category: {speed: 0.8, heading: 0.3, ...}"
     )
+
+
+class AnalysisResult(BaseModel):
+    """
+    Result of anomaly detection analysis.
+
+    This is the output published to NATS (analyzed.[mmsi] topic) and
+    contains the binary decision (anomaly yes/no) plus detailed scores.
+    """
+
+    # Core identifiers (from input)
+    msg_uuid: UUID
+    msg_time: datetime
+    mmsi: int
+
+    # Nested analysis payload
+    analysis: AnalysisPayload
+
 
 
 class DetectionMetrics(BaseModel):

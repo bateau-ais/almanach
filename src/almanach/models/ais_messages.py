@@ -147,31 +147,31 @@ class AisMessage(BaseModel, extra="ignore"):
                     pass
         return data
 
-    def model_dump(self, *args, **kwargs):
-        """Dump a flat dict by default.
+    # def model_dump(self, *args, **kwargs):
+    #     """Dump a flat dict by default.
 
-        By default, nested sub-models are flattened into the top-level output.
-        To keep nested objects, pass `flat=False`.
-        """
+    #     By default, nested sub-models are flattened into the top-level output.
+    #     To keep nested objects, pass `flat=False`.
+    #     """
 
-        flat = kwargs.pop("flat", True)
-        dumped = super().model_dump(*args, **kwargs)
-        if not flat:
-            return dumped
+    #     flat = kwargs.pop("flat", True)
+    #     dumped = super().model_dump(*args, **kwargs)
+    #     if not flat:
+    #         return dumped
 
-        for key in (
-            "position",
-            "class_a",
-            "class_b",
-            "static",
-            "voyage",
-            "aton",
-            "base_station",
-        ):
-            sub = dumped.pop(key, None)
-            if isinstance(sub, dict):
-                dumped.update(sub)
-        return dumped
+    #     for key in (
+    #         "position",
+    #         "class_a",
+    #         "class_b",
+    #         "static",
+    #         "voyage",
+    #         "aton",
+    #         "base_station",
+    #     ):
+    #         sub = dumped.pop(key, None)
+    #         if isinstance(sub, dict):
+    #             dumped.update(sub)
+    #     return dumped
 
 
 # ============== ENRICHED MODEL ==============
@@ -198,4 +198,4 @@ class EnrichedMessage(BaseModel):
         description="Maritime Mobile Service Identity (9 digits)",
     )
 
-    position: EnrichedPosition
+    enr_position: EnrichedPosition
