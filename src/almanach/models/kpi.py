@@ -1,38 +1,18 @@
 from datetime import datetime
 from typing import List
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from uuid import UUID
 
 
 class AnalysisPayload(BaseModel):
     """Detailed analysis payload nested in the output message."""
 
-    # Statistical scores
-    zscore_velocity: float = Field(..., description="Z-score for velocity anomaly")
-    zscore_heading: float = Field(..., description="Z-score for heading anomaly")
-
-    # Individual anomaly flags
-    outlier_velocity: bool = Field(..., description="Velocity is statistical outlier")
-    outlier_heading: bool = Field(..., description="Heading is statistical outlier")
-    outlier_acceleration: bool = Field(default=False, description="Acceleration is excessive")
-    outlier_zone: bool = Field(default=False, description="In unusual zone")
-    outlier_pattern: bool = Field(default=False, description="Abnormal pattern detected")
-
-    # Final decision
-    anomaly_detected: bool = Field(..., description="BINARY DECISION: Anomaly yes/no")
+    anomaly_detected: bool = Field(...)
     anomaly_score: float = Field(..., ge=0.0, le=1.0, description="Overall anomaly score [0-1]")
     anomaly_reasons: List[str] = Field(default_factory=list, description="List of triggered anomaly types")
 
-    # Confidence and metadata
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in detection [0-1]")
-    analysis_time_ms: int = Field(..., ge=0, description="Processing time (milliseconds)")
-
-    # Individual category scores for detailed analysis
-    category_scores: dict | None = Field(
-        default=None,
-        description="Detailed scores per category: {speed: 0.8, heading: 0.3, ...}"
-    )
 
 
 class AnalysisResult(BaseModel):
