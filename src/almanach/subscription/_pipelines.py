@@ -177,7 +177,7 @@ class JoinPipeline[T]:
                                 await maybe_awaitable
                         except (ValidationError, ValueError, TypeError) as exc:
                             self._log.warning(
-                                    f"Joined message failed validation: {exc}",
+                                    f"Joined message failed validation: {exc}\n{merged}",
                                 extra={
                                     "source": source_name,
                                     "error_type": type(exc).__name__,
@@ -202,7 +202,7 @@ class JoinPipeline[T]:
             for t in topics:
                 subject = _subject(t)
                 self._log.info(
-                    "Subscribing to subject",
+                    f"Subscribing to subject {subject}",
                     extra={"source": source_name, "subject": subject},
                 )
                 await self._nc.subscribe(subject, cb=handler)
