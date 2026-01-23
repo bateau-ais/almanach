@@ -101,7 +101,7 @@ class AisMessage(BaseModel, extra="ignore"):
 
     msg_uuid: UUID = Field(..., default_factory=uuid4, description="UUID of the message.")
     msg_time: datetime = Field(
-        ..., default_factory=datetime.now, description="Timestamp of the message creation.", init=False
+        ..., description="Timestamp of the message creation.", init=False
     )
     mmsi: int = Field(
         ge=100000000,
