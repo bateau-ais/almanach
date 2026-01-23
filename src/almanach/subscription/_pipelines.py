@@ -177,7 +177,7 @@ class JoinPipeline[T]:
                                 await maybe_awaitable
                         except (ValidationError, ValueError, TypeError) as exc:
                             self._log.warning(
-                                "Joined message failed validation",
+                                    f"Joined message failed validation: {exc}",
                                 extra={
                                     "source": source_name,
                                     "error_type": type(exc).__name__,
